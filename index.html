@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نظام اعتماد الفواتير</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Tahoma,Arial,sans-serif;background:#f4f7fb;color:#172033}
+header{background:#0f2747;color:#fff;padding:18px 28px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 3px 12px #0002}
+header h1{margin:0;font-size:22px}header small{opacity:.8}
+.container{max-width:1400px;margin:22px auto;padding:0 18px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:18px}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 4px 18px #15345a12;border:1px solid #e7edf5}
+.stat b{font-size:28px;display:block;margin-top:8px}.blue{border-right:5px solid #2563eb}.orange{border-right:5px solid #f59e0b}.green{border-right:5px solid #16a34a}.red{border-right:5px solid #dc2626}
+.grid{display:grid;grid-template-columns:420px 1fr;gap:18px}
+label{display:block;font-weight:bold;font-size:13px;margin:12px 0 6px}
+input,select,textarea{width:100%;padding:11px;border:1px solid #d5deea;border-radius:9px;font-family:inherit;background:#fff}
+textarea{min-height:80px;resize:vertical}
+button{border:0;border-radius:9px;padding:11px 16px;font-family:inherit;font-weight:bold;cursor:pointer}
+.primary{background:#2563eb;color:#fff}.success{background:#16a34a;color:#fff}.danger{background:#dc2626;color:#fff}.warning{background:#f59e0b;color:#fff}.secondary{background:#e8eef6;color:#172033}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.drop{border:2px dashed #9fb4cf;padding:28px;text-align:center;border-radius:12px;background:#f8fbff;cursor:pointer}
+.drop:hover{background:#eef6ff}.drop input{display:none}
+.preview{height:650px;background:#202733;border-radius:12px;overflow:hidden}.preview iframe{width:100%;height:100%;border:0}
+.empty{height:100%;display:flex;align-items:center;justify-content:center;color:#aab7c8}
+.signature{border:1px solid #cbd5e1;border-radius:10px;background:#fff;touch-action:none;width:100%;height:160px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap}
+.tablewrap{overflow:auto}.table{width:100%;border-collapse:collapse;background:#fff}.table th,.table td{padding:10px;border-bottom:1px solid #edf1f6;text-align:right;white-space:nowrap;font-size:13px}.table th{background:#f7f9fc}
+.badge{padding:5px 9px;border-radius:20px;font-size:11px;font-weight:bold}.pending{background:#fff3cd;color:#946200}.approved{background:#dcfce7;color:#166534}.rejected{background:#fee2e2;color:#991b1b}.returned{background:#e0e7ff;color:#3730a3}
+.notice{background:#eef6ff;border:1px solid #cfe2ff;padding:10px;border-radius:9px;font-size:12px;margin-top:10px}
+ .approval-panel{display:none;margin-top:18px}.approval-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.approval-card{border:1px solid #e2e8f0;border-radius:12px;padding:14px;background:#fff}.approval-card h4{margin:0 0 8px}.approval-card button{margin:3px}.approval-history{margin-top:14px;font-size:13px;line-height:1.9}@media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.preview{height:500px}.approval-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div><h1>نظام اعتماد الفواتير</h1><small>رفع PDF • مراجعة • توقيع • اعتماد</small></div><div id="clock"></div></header>
+<div class="container">
+<div class="stats">
+<div class="card stat blue">إجمالي الفواتير<b id="sAll">0</b></div>
+<div class="card stat orange">بانتظار الاعتماد<b id="sPending">0</b></div>
+<div class="card stat green">معتمدة<b id="sApproved">0</b></div>
+<div class="card stat red">مرفوضة<b id="sRejected">0</b></div>
+</div>
+
+<div class="grid">
+<div class="card">
+<h3>رفع فاتورة جديدة</h3>
+<div class="drop" onclick="document.getElementById('pdf').click()">
+<strong>اضغط لاختيار ملف PDF</strong><br><small>أو اسحب الفاتورة هنا</small>
+<input id="pdf" type="file" accept="application/pdf">
+</div>
+<div id="fileName" class="notice" style="display:none"></div>
+
+<label>رقم الفاتورة</label><input id="invNo" placeholder="مثال: INV-2026-001">
+<label>اسم المورد / المقاول</label><input id="vendor" placeholder="اسم الشركة">
+<label>تاريخ الفاتورة</label><input id="date" type="date">
+<label>أمر الشراء / العقد</label><input id="po" placeholder="PO / Contract">
+<label>قيمة الفاتورة</label><input id="amount" type="number" step="0.01" placeholder="0.00">
+<label>الضريبة</label><input id="tax" type="number" step="0.01" placeholder="0.00">
+<label>الإجمالي</label><input id="total" type="number" step="0.01" placeholder="0.00">
+<label>ملاحظات المراجع</label><textarea id="notes" placeholder="اكتب الملاحظات..."></textarea>
+
+<label>توقيع المعتمد</label>
+<canvas id="sig" class="signature"></canvas>
+<div class="actions"><button class="secondary" onclick="clearSig()">مسح التوقيع</button><button class="primary" onclick="saveInvoice()">حفظ وإضافة للسجل</button></div>
+<div class="notice">ملاحظة: النظام يعمل محليًا داخل المتصفح، والبيانات محفوظة على هذا الجهاز باستخدام Local Storage.</div>
+</div>
+
+<div class="card">
+<div class="toolbar"><h3 style="margin:0">معاينة الفاتورة</h3><span id="statusText" class="badge pending">لا توجد فاتورة</span></div>
+<div class="preview" id="preview"><div class="empty">ارفع ملف PDF لعرضه هنا</div></div>
+</div>
+</div>
+
+<div class="card" style="margin-top:18px">
+<div class="toolbar"><h3 style="margin:0">سجل الفواتير</h3>
+<div><input id="search" placeholder="بحث برقم الفاتورة أو المورد..." oninput="renderTable()" style="width:260px;display:inline-block"><button class="secondary" onclick="exportCSV()">تصدير Excel/CSV</button></div></div>
+<div class="tablewrap"><table class="table"><thead><tr><th>#</th><th>رقم الفاتورة</th><th>المورد</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="tbody"></tbody></table></div>
+</div>
+<div class="card" id="passwordSettings" style="margin-top:18px">
+  <div class="toolbar"><h3 style="margin:0">🔐 إعدادات كلمات مرور الاعتماد</h3></div>
+  <div class="notice">أنشئ رقمًا سريًا منفصلًا لكل مسؤول، ثم اضغط حفظ. بعد الحفظ لن تظهر الأرقام على الشاشة.</div>
+  <label>مسئول الدورات</label>
+  <input id="pwCycles" type="password" inputmode="numeric" placeholder="مثال: 1234">
+  <label>مدير المشروع</label>
+  <input id="pwProject" type="password" inputmode="numeric" placeholder="مثال: 5678">
+  <label>المدير العام</label>
+  <input id="pwGeneral" type="password" inputmode="numeric" placeholder="مثال: 9012">
+  <div class="actions">
+    <button class="primary" type="button" onclick="saveApprovalPasswords()">حفظ كلمات المرور</button>
+    <button class="secondary" type="button" onclick="showPasswordSettings()">عرض حالة الإعدادات</button>
+  </div>
+  <div id="passwordStatus" class="notice"></div>
+</div>
+<div id="approvalPanel" class="card approval-panel">
+  <div class="toolbar"><h3 style="margin:0">التوقيعات والاعتمادات</h3><button class="secondary" onclick="closeApprovalPanel()">إغلاق</button></div>
+  <div id="approvalInfo" class="notice"></div>
+  <div class="approval-grid">
+    <div class="approval-card"><h4>1. مسئول الدورات</h4><div id="cyclesState"></div><div class="actions"><button class="success" onclick="approveCurrent('cycles')">اعتماد</button><button class="warning" onclick="returnCurrent('cycles')">إرجاع</button><button class="danger" onclick="rejectCurrent('cycles')">رفض</button></div></div>
+    <div class="approval-card"><h4>2. مدير المشروع</h4><div id="projectState"></div><div class="actions"><button class="success" onclick="approveCurrent('project')">اعتماد</button><button class="warning" onclick="returnCurrent('project')">إرجاع</button><button class="danger" onclick="rejectCurrent('project')">رفض</button></div></div>
+    <div class="approval-card"><h4>3. المدير العام</h4><div id="generalState"></div><div class="actions"><button class="success" onclick="approveCurrent('general')">اعتماد نهائي</button><button class="warning" onclick="returnCurrent('general')">إرجاع</button><button class="danger" onclick="rejectCurrent('general')">رفض</button></div></div>
+  </div>
+  <div class="approval-history"><b>سجل العمليات:</b><div id="approvalHistory">لا توجد عمليات</div></div>
+</div>
+</div>
+
+<script>
+let invoices=JSON.parse(localStorage.getItem('invoice_system_data')||'[]'), currentPdf='', currentPdfName='', currentPdfData='', currentApprovalId='';
+const $=id=>document.getElementById(id);
+
+function updateStats(){
+ $('sAll').textContent=invoices.length;
+ $('sPending').textContent=invoices.filter(x=>x.status==='pending').length;
+ $('sApproved').textContent=invoices.filter(x=>x.status==='approved').length;
+ $('sRejected').textContent=invoices.filter(x=>x.status==='rejected').length;
+}
+function save(){
+  try{
+    localStorage.setItem('invoice_system_data',JSON.stringify(invoices));
+    updateStats();renderTable();generateReport();
+    return true;
+  }catch(e){
+    alert('تعذر حفظ التغيير. مساحة التخزين المحلية ممتلئة بسبب ملفات PDF الكبيرة. لن يتم فقدان شاشة الاعتماد الحالية، لكن يجب تقليل حجم PDF أو استخدام تخزين قاعدة بيانات.');
+    return false;
+  }
+}
+function roleStateAr(s){return {pending:'بانتظار',approved:'تم الاعتماد',rejected:'مرفوض',returned:'مرتجع'}[s]||'بانتظار'}
+function workflowState(x){
+  if(x.managerGeneralStatus==='approved')return 'approved';
+  if([x.cyclesStatus,x.projectManagerStatus,x.managerGeneralStatus].includes('rejected'))return 'rejected';
+  if([x.cyclesStatus,x.projectManagerStatus,x.managerGeneralStatus].includes('returned'))return 'returned';
+  return 'pending';
+}
+function roleBadge(s){const c={pending:'pending',approved:'approved',rejected:'rejected',returned:'returned'}[s]||'pending';return '<span class="badge '+c+'">'+roleStateAr(s)+'</span>'}
+function renderTable(){
+  const q=$('search').value.trim().toLowerCase(),body=$('tbody');body.innerHTML='';
+  invoices.filter(x=>(x.invNo+' '+x.vendor).toLowerCase().includes(q)).forEach((x,i)=>{
+    x.cyclesStatus=x.cyclesStatus||'pending';x.projectManagerStatus=x.projectManagerStatus||'pending';x.managerGeneralStatus=x.managerGeneralStatus||'pending';
+    x.status=workflowState(x);
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+(i+1)+'</td><td>'+esc(x.invNo)+'</td><td>'+esc(x.vendor)+'</td><td>'+esc(x.date||'')+'</td><td>'+Number(x.total||0).toLocaleString()+' SAR</td><td>'+roleBadge(x.cyclesStatus)+' | '+roleBadge(x.projectManagerStatus)+' | '+roleBadge(x.managerGeneralStatus)+'</td><td>'+statusAr(x.status)+'</td><td><button class="primary" onclick="openPDF(\''+x.id+'\')">فتح PDF</button><button class="secondary" onclick="showApprovals(\''+x.id+'\')">الاعتمادات</button><button class="danger" onclick="removeInvoice(\''+x.id+'\')">حذف</button></td>';
+    body.appendChild(tr);
+  });
+}
+function statusAr(s){return {pending:'بانتظار الاعتماد',approved:'معتمدة',rejected:'مرفوضة',returned:'مرتجعة'}[s]||s}
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function changeStatus(id,status){const x=invoices.find(a=>a.id===id);if(!x)return;x.status=status;x.actionDate=new Date().toLocaleString('ar-SA');save()}
+function removeInvoice(id){if(confirm('هل تريد حذف الفاتورة؟')){invoices=invoices.filter(x=>x.id!==id);save()}}
+$('pdf').addEventListener('change',e=>loadPDF(e.target.files[0]));
+document.querySelector('.drop').addEventListener('dragover',e=>e.preventDefault());
+document.querySelector('.drop').addEventListener('drop',e=>{e.preventDefault();loadPDF(e.dataTransfer.files[0])});
+function loadPDF(file){
+ if(!file||file.type!=='application/pdf'){alert('من فضلك اختر ملف PDF فقط');return}
+ currentPdf=URL.createObjectURL(file);currentPdfName=file.name;
+ $('fileName').style.display='block';$('fileName').textContent='الملف: '+file.name;
+ $('preview').innerHTML=`<iframe src="${currentPdf}"></iframe>`;
+ $('statusText').textContent='فاتورة جديدة';$('statusText').className='badge pending';
+}
+function saveInvoice(){
+ if(!currentPdf){alert('ارفع ملف PDF أولاً');return}
+ const inv={id:Date.now().toString(),invNo:$('invNo').value||currentPdfName,vendor:$('vendor').value||'غير محدد',date:$('date').value,
+ po:$('po').value,amount:$('amount').value,tax:$('tax').value,total:$('total').value,notes:$('notes').value,status:'pending',
+ pdfName:currentPdfName,pdfData:currentPdfData,signature:$('sig').toDataURL(),createdAt:new Date().toLocaleString('ar-SA')};
+ try{
+    invoices.unshift(inv);save();alert('تم حفظ الفاتورة وملف PDF وإضافتهما لقائمة الاعتماد');clearForm();
+  }catch(e){
+    invoices.shift();
+    alert('تعذر حفظ ملف PDF داخل Local Storage. استخدم ملف PDF أصغر أو نظام تخزين خارجي.');
+  }
+}
+function clearForm(){['invNo','vendor','date','po','amount','tax','total','notes'].forEach(id=>$(id).value='');clearSig();currentPdf='';currentPdfData='';currentPdfName='';$('pdf').value='';$('fileName').style.display='none';$('preview').innerHTML='<div class="empty">ارفع ملف PDF لعرضه هنا</div>'}
+function openPDF(id){
+  const x=invoices.find(a=>a.id===id);
+  if(!x||!x.pdfData){alert('ملف PDF غير محفوظ لهذه الفاتورة');return}
+  const w=window.open();
+  if(!w){alert('يرجى السماح بالنوافذ المنبثقة لفتح الملف');return}
+  w.document.write(`<title>${esc(x.pdfName||'الفاتورة.pdf')}</title><iframe src="${x.pdfData}" style="width:100%;height:100vh;border:0"></iframe>`);
+}
+function showApprovals(id){
+  const x=invoices.find(a=>a.id===id);
+  if(!x){alert('تعذر العثور على الفاتورة');return}
+  currentApprovalId=id;
+  x.cyclesStatus=x.cyclesStatus||'pending';
+  x.projectManagerStatus=x.projectManagerStatus||'pending';
+  x.managerGeneralStatus=x.managerGeneralStatus||'pending';
+  $('approvalPanel').style.display='block';
+  $('approvalInfo').textContent='الفاتورة: '+(x.invNo||'')+' — المورد: '+(x.vendor||'')+' — المرحلة الحالية: '+nextApprovalName(x);
+  $('cyclesState').innerHTML=roleBadge(x.cyclesStatus);
+  $('projectState').innerHTML=roleBadge(x.projectManagerStatus);
+  $('generalState').innerHTML=roleBadge(x.managerGeneralStatus);
+  $('approvalHistory').innerHTML=(x.approvals||[]).map(a=>esc(a.role)+' — '+esc(a.status)+' — '+esc(a.date)).join('<br>')||'لا توجد عمليات اعتماد حتى الآن';
+  $('approvalPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function closeApprovalPanel(){
+  $('approvalPanel').style.display='none';
+  currentApprovalId='';
+}
+const APPROVAL_PW_KEY='invoice_approval_passwords_v2';
+function getApprovalPasswords(){
+  try{return JSON.parse(localStorage.getItem(APPROVAL_PW_KEY)||'{}')}catch(e){return {}}
+}
+function saveApprovalPasswords(){
+  const current=getApprovalPasswords();
+  const c=$('pwCycles').value.trim(),p=$('pwProject').value.trim(),g=$('pwGeneral').value.trim();
+  if(!c&&!p&&!g){alert('أدخل كلمة مرور واحدة على الأقل');return}
+  if(c)current.cycles=c;
+  if(p)current.project=p;
+  if(g)current.general=g;
+  localStorage.setItem(APPROVAL_PW_KEY,JSON.stringify(current));
+  $('pwCycles').value='';$('pwProject').value='';$('pwGeneral').value='';
+  showPasswordSettings();
+  alert('تم حفظ كلمات المرور بنجاح');
+}
+function showPasswordSettings(){
+  const p=getApprovalPasswords();
+  if(!$('passwordStatus'))return;
+  $('passwordStatus').textContent='مسئول الدورات: '+(p.cycles?'✓ تم الإعداد':'✗ غير مُعد')+
+    ' | مدير المشروع: '+(p.project?'✓ تم الإعداد':'✗ غير مُعد')+
+    ' | المدير العام: '+(p.general?'✓ تم الإعداد':'✗ غير مُعد');
+}
+function nextApprovalName(x){
+  if(x.cyclesStatus!=='approved')return 'مسئول الدورات';
+  if(x.projectManagerStatus!=='approved')return 'مدير المشروع';
+  if(x.managerGeneralStatus!=='approved')return 'المدير العام';
+  return 'تم الاعتماد النهائي';
+}
+function setApproval(role,status){
+  if(!currentApprovalId){alert('افتح الفاتورة أولاً من زر الاعتمادات');return}
+  const x=invoices.find(a=>a.id===currentApprovalId);
+  if(!x){alert('الفاتورة غير موجودة');return}
+  const field={cycles:'cyclesStatus',project:'projectManagerStatus',general:'managerGeneralStatus'}[role];
+  const name={cycles:'مسئول الدورات',project:'مدير المشروع',general:'المدير العام'}[role];
+  if(!field){alert('دور اعتماد غير صحيح');return}
+  if(role==='project'&&x.cyclesStatus!=='approved'){alert('يجب أن يعتمد مسئول الدورات أولاً');return}
+  if(role==='general'&&x.projectManagerStatus!=='approved'){alert('يجب أن يعتمد مدير المشروع أولاً');return}
+  const passwords=getApprovalPasswords();
+  if(!passwords[role]){alert('لم يتم إعداد كلمة مرور لـ '+name);return}
+  const entered=prompt('أدخل كلمة مرور '+name);
+  if(entered===null)return;
+  if(String(entered)!==String(passwords[role])){alert('كلمة المرور غير صحيحة');return}
+  x[field]=status;
+  x.approvals=x.approvals||[];
+  x.approvals.push({role:name,status:roleStateAr(status),date:new Date().toLocaleString('ar-SA')});
+  x.status=workflowState(x);
+  if(save()){
+    alert(status==='approved'?'تم الاعتماد بنجاح':'تم تحديث حالة الاعتماد');
+    showApprovals(x.id);
+  }
+}
+function approveCurrent(role){setApproval(role,'approved')}
+function returnCurrent(role){setApproval(role,'returned')}
+function rejectCurrent(role){setApproval(role,'rejected')}
+function exportCSV(){
+ let rows=[['رقم الفاتورة','المورد','التاريخ','أمر الشراء','المبلغ','الضريبة','الإجمالي','الحالة','وقت الإضافة']];
+ invoices.forEach(x=>rows.push([x.invNo,x.vendor,x.date,x.po,x.amount,x.tax,x.total,statusAr(x.status),x.createdAt]));
+ const csv='\\ufeff'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='Invoice_Approval_Register.csv';a.click();
+}
+const c=$('sig'),ctx=c.getContext('2d');let drawing=false;
+function resizeCanvas(){const d=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*d;c.height=h*d;ctx.scale(d,d);ctx.lineWidth=2;ctx.lineCap='round'}
+resizeCanvas();window.addEventListener('resize',resizeCanvas);
+function pos(e){const r=c.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return{x:p.clientX-r.left,y:p.clientY-r.top}}
+function start(e){drawing=true;ctx.beginPath();let p=pos(e);ctx.moveTo(p.x,p.y);e.preventDefault()}
+function move(e){if(!drawing)return;let p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();e.preventDefault()}
+function end(){drawing=false}
+c.addEventListener('mousedown',start);c.addEventListener('mousemove',move);c.addEventListener('mouseup',end);c.addEventListener('mouseleave',end);
+c.addEventListener('touchstart',start,{passive:false});c.addEventListener('touchmove',move,{passive:false});c.addEventListener('touchend',end);
+function clearSig(){ctx.clearRect(0,0,c.clientWidth,c.clientHeight)}
+setInterval(()=>{$('clock').textContent=new Date().toLocaleString('ar-SA')},1000);
+
+function getReportRows(){const f=$('reportFrom').value,to=$('reportTo').value,st=$('reportStatus').value,v=$('reportVendor').value.trim().toLowerCase();return invoices.filter(x=>{const d=x.date||'';const s=workflowState(x);return(!f||d>=f)&&(!to||d<=to)&&(!st||s===st)&&(!v||(x.vendor||'').toLowerCase().includes(v))})}
+function generateReport(){const rows=getReportRows(),b=$('reportBody');b.innerHTML='';const total=rows.reduce((a,x)=>a+Number(x.total||0),0),ap=rows.filter(x=>workflowState(x)==='approved').length,pe=rows.filter(x=>workflowState(x)==='pending').length,rj=rows.filter(x=>['rejected','returned'].includes(workflowState(x))).length;$('rAll').textContent=rows.length;$('rPending').textContent=pe;$('rApproved').textContent=ap;$('rRejected').textContent=rj;rows.forEach(x=>{const tr=document.createElement('tr');tr.innerHTML='<td>'+esc(x.invNo)+'</td><td>'+esc(x.vendor)+'</td><td>'+esc(x.date||'')+'</td><td>'+Number(x.total||0).toLocaleString()+' SAR</td><td>'+roleStateAr(x.cyclesStatus||'pending')+'</td><td>'+roleStateAr(x.projectManagerStatus||'pending')+'</td><td>'+roleStateAr(x.managerGeneralStatus||'pending')+'</td><td>'+statusAr(workflowState(x))+'</td>';b.appendChild(tr)});$('reportSummary').textContent='عدد الفواتير: '+rows.length+' | إجمالي القيمة: '+total.toLocaleString()+' SAR | المعتمدة: '+ap+' | قيد الاعتماد: '+pe+' | المرفوضة/المرتجعة: '+rj}
+function exportReportCSV(){const rows=[['رقم الفاتورة','المورد','التاريخ','الإجمالي','الحالة']];getReportRows().forEach(x=>rows.push([x.invNo,x.vendor,x.date,x.total,statusAr(workflowState(x))]));const csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='Professional_Invoice_Report.csv';a.click()}
+function printReport(){generateReport();const w=window.open('','_blank');if(!w){alert('يرجى السماح بالنوافذ المنبثقة');return}w.document.write('<!doctype html><html lang="ar" dir="rtl"><meta charset="UTF-8"><title>تقرير الفواتير</title><style>body{font-family:Tahoma;padding:30px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:8px;text-align:right}th{background:#eee}</style><body><h1>تقرير نظام اعتماد الفواتير</h1><p>تاريخ التقرير: '+new Date().toLocaleString('ar-SA')+'</p>'+document.querySelector('#reports .stats').outerHTML+document.querySelector('#reportSummary').parentElement.outerHTML+document.querySelector('#reports table').outerHTML+'</body></html>');w.document.close();setTimeout(()=>w.print(),400)}
+
+updateStats();renderTable();generateReport();showPasswordSettings();
+</script>
+</body>
+</html>
